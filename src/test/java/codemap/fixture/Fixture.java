@@ -57,6 +57,41 @@ public final class Fixture {
         return shared;
     }
 
+    /** A private, mutable copy of the compiled workspace with every repo committed to git. */
+    public static Path gitCopy(Path target) {
+        try {
+            copyTree(shared(), target);
+            for (String repo : REPOS) {
+                Path dir = target.resolve(repo);
+                Files.writeString(dir.resolve(".gitignore"), "target/\n");
+                git(dir, "init", "-q", "-b", "main");
+                git(dir, "add", "-A");
+                git(dir, "commit", "-q", "-m", "initial");
+            }
+            return target;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public static void git(Path dir, String... args) {
+        List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=fixture",
+                "-c", "user.email=fixture@example.com", "-c", "commit.gpgsign=false"));
+        cmd.addAll(List.of(args));
+        try {
+            Process p = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes());
+            if (p.waitFor() != 0) {
+                throw new IllegalStateException("git " + String.join(" ", args) + " failed: " + out);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** Copies the fixture sources into {@code root} (wiped first) and compiles every module. */
     public static Path build(Path root) {
         try {

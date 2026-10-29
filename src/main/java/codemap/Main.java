@@ -5,13 +5,14 @@ import java.sql.Connection;
 import java.util.concurrent.Callable;
 
 import codemap.db.Database;
+import codemap.scan.ScanCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 @Command(name = "codemap", mixinStandardHelpOptions = true, version = "codemap 0.1.0",
         description = "Architecture fact database for Spring Boot codebases, queried by a chat LLM.",
-        subcommands = {Main.InitDb.class})
+        subcommands = {ScanCommand.class, Main.InitDb.class})
 public final class Main implements Runnable {
 
     public static void main(String[] args) {

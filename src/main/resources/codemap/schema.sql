@@ -9,6 +9,7 @@ CREATE TABLE repos (
   path         TEXT,
   git_commit   TEXT,
   git_dirty    INTEGER,
+  fingerprint  TEXT,
   scanned_at   TEXT,
   module_count INTEGER,
   class_count  INTEGER

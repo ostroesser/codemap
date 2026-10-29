@@ -11,6 +11,7 @@ tables:
       path: local path
       git_commit: HEAD commit hash
       git_dirty: 1 if uncommitted changes at scan time
+      fingerprint: commit + build-output hash; rescans skip unchanged repos
       scanned_at: ISO timestamp
       module_count: number of Maven modules
       class_count: number of scanned classes
