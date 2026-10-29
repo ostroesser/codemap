@@ -1,0 +1,22 @@
+# Example local settings. Copy to codemap.local.yml (git-ignored) and adapt to your codebase.
+# codemap scan reads ./codemap.local.yml automatically, or the file given with --config.
+
+# Extra role rules, checked before the built-in Spring rules. First match wins.
+# Each entry has a role and exactly one of: annotation, extends, package.
+roles:
+  # A custom annotation (meta-annotations are followed, so a stereotype on a stereotype works).
+  - annotation: com.example.platform.UseCase
+    role: service
+  # Any subclass or implementation of a framework base type.
+  - extends: com.example.platform.AbstractMessageHandler
+    role: listener
+  # A package pattern on the class fqn; * matches anything, dots included.
+  - package: "*.adapter.out.*"
+    role: client
+
+# Calls are stored when the target is scanned code or a known integration API
+# (Kafka/JMS/Rabbit templates, REST clients, event publisher). Add more API prefixes here:
+# a class (and its nested types), a package, or Class#method.
+calls:
+  include:
+    - com.example.platform.messaging.EventBus

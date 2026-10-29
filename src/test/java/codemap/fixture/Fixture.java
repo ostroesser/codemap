@@ -57,6 +57,16 @@ public final class Fixture {
         return shared;
     }
 
+    /** A private, mutable copy of the compiled workspace (no git). */
+    public static Path copy(Path target) {
+        try {
+            copyTree(shared(), target);
+            return target;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /** A private, mutable copy of the compiled workspace with every repo committed to git. */
     public static Path gitCopy(Path target) {
         try {
@@ -137,6 +147,9 @@ public final class Fixture {
                         + " failed to compile:\n" + diagnostics);
             }
         }
+
+        // What `mvn dependency:build-classpath -Dmdep.outputFile=target/codemap.classpath` writes.
+        Files.writeString(moduleDir.resolve("target/codemap.classpath"), testClasspath());
 
         Path resources = moduleDir.resolve("src/main/resources");
         if (Files.isDirectory(resources)) {

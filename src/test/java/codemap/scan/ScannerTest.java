@@ -38,7 +38,7 @@ class ScannerTest {
     }
 
     static Scanner.Options options(boolean force) {
-        return new Scanner.Options("shop", force, new PrintStream(new ByteArrayOutputStream()));
+        return new Scanner.Options("shop", force, LocalConfig.defaults(), new PrintStream(new ByteArrayOutputStream()));
     }
 
     @Test

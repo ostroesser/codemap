@@ -349,12 +349,16 @@ SELECT service, kind, COALESCE(destination, schedule, payload_type) AS trigger,
        class_fqn, method_id, source
 FROM listeners_effective;
 ;;
--- Interface/abstract calls expand to every concrete override found via type_hierarchy.
+-- Interface/abstract calls expand to every concrete override found via type_hierarchy;
+-- abstract targets without a scanned implementation (e.g. HTTP client proxies) stay as they are.
 CREATE VIEW calls_resolved AS
 SELECT c.caller_class, c.caller_method, c.callee_method,
        c.callee_method AS target_method, 0 AS via_interface, c.line
 FROM calls c
-WHERE NOT EXISTS (SELECT 1 FROM methods m WHERE m.method_id = c.callee_method AND m.is_abstract = 1)
+WHERE NOT EXISTS (SELECT 1 FROM methods a WHERE a.method_id = c.callee_method AND a.is_abstract = 1)
+   OR NOT EXISTS (SELECT 1 FROM type_hierarchy h
+                  JOIN methods m ON m.method_id = h.class_fqn || substr(c.callee_method, instr(c.callee_method, '#'))
+                  WHERE h.supertype_fqn = c.callee_class AND m.is_abstract = 0)
 UNION ALL
 SELECT c.caller_class, c.caller_method, c.callee_method,
        m.method_id AS target_method, 1 AS via_interface, c.line

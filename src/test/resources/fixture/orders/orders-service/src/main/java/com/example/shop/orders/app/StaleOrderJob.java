@@ -16,6 +16,6 @@ public class StaleOrderJob {
 
     @Scheduled(cron = "${shop.jobs.stale-cron:0 0 * * * *}")
     public void purgeStaleOrders() {
-        orders.deleteAll(orders.findByStatus("NEW"));
+        orders.findByStatus("NEW").forEach(order -> orders.delete(order));
     }
 }

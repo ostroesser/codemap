@@ -16,14 +16,20 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import codemap.db.BatchInserter;
 import codemap.db.Database;
+import codemap.scan.bytecode.BytecodeScanner;
+import codemap.scan.bytecode.ClasspathIndex;
+import codemap.scan.bytecode.CodeModel;
+import codemap.scan.bytecode.Roles;
 import codemap.scan.config.ConfigFiles;
 import codemap.scan.maven.PomModel;
 import codemap.scan.maven.PomReader;
@@ -35,7 +41,7 @@ import codemap.scan.maven.PomReader;
  */
 public final class Scanner {
 
-    public record Options(String app, boolean force, PrintStream log) {
+    public record Options(String app, boolean force, LocalConfig config, PrintStream log) {
     }
 
     public record RepoReport(String repo, boolean skipped, int modules, int warnings) {
@@ -56,6 +62,8 @@ public final class Scanner {
 
     private final Connection conn;
     private final Options options;
+    private Set<String> internalFqns;
+    private Map<String, BytecodeScanner.Owner> owners;
 
     public Scanner(Connection conn, Options options) {
         this.conn = conn;
@@ -74,6 +82,14 @@ public final class Scanner {
         repos.forEach(poms::addRepo);
         List<PomModel> models = poms.resolve();
         Map<PomModel, String> moduleKeys = assignModuleKeys(models);
+        internalFqns = new HashSet<>();
+        for (PomModel m : models) {
+            internalFqns.addAll(BytecodeScanner.classNames(m.dir().resolve("target/classes")));
+        }
+        owners = loadOwners();
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("DELETE FROM scan_warnings WHERE repo IS NULL");
+        }
 
         List<RepoReport> reports = new ArrayList<>();
         for (var repo : repos.entrySet()) {
@@ -81,7 +97,45 @@ public final class Scanner {
             reports.add(scanRepo(repo.getKey(), repo.getValue(), repoModels, moduleKeys));
         }
         linkInternalModules();
+        rebuildCodeModel(models);
         return reports;
+    }
+
+    /** Workspace-wide passes over all repos, changed or not. */
+    private void rebuildCodeModel(List<PomModel> models) throws SQLException, IOException {
+        try (ClasspathIndex classpath = new ClasspathIndex()) {
+            int files = 0;
+            for (PomModel m : models) {
+                if (classpath.addClasspathFile(m.dir())) {
+                    files++;
+                }
+            }
+            if (files == 0) {
+                String msg = "no " + ClasspathIndex.CLASSPATH_FILE + " files: meta-annotations of library annotations"
+                        + " fall back to built-in Spring knowledge (use --classpath-from-maven)";
+                options.log().println("  note: " + msg);
+                try (var w = new BatchInserter(conn, "scan_warnings", "repo", "module", "kind", "message")) {
+                    w.add(null, null, "no_classpath", msg);
+                }
+            }
+            CodeModel.rebuild(conn, classpath);
+        }
+        Roles.assign(conn, options.config());
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("UPDATE repos SET class_count = (SELECT COUNT(*) FROM classes c"
+                    + " WHERE c.repo = repos.repo AND c.is_external = 0)");
+        }
+    }
+
+    private Map<String, BytecodeScanner.Owner> loadOwners() throws SQLException {
+        Map<String, BytecodeScanner.Owner> result = new HashMap<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT fqn, repo, module FROM classes WHERE is_external = 0")) {
+            while (rs.next()) {
+                result.put(rs.getString(1), new BytecodeScanner.Owner(rs.getString(2), rs.getString(3)));
+            }
+        }
+        return result;
     }
 
     // ── repo discovery ────────────────────────────────────────────────
@@ -132,7 +186,7 @@ public final class Scanner {
     // ── per repo ───────────────────────────────────────────────────────
 
     private RepoReport scanRepo(String repo, Path dir, List<PomModel> models, Map<PomModel, String> keys)
-            throws SQLException {
+            throws SQLException, IOException {
         Git.State git = Git.state(dir);
         String fingerprint = git == null || git.dirty() ? null : fingerprint(git.commit(), models);
         if (!options.force() && fingerprint != null && fingerprint.equals(storedFingerprint(repo))) {
@@ -143,6 +197,7 @@ public final class Scanner {
         conn.setAutoCommit(false);
         try {
             deleteRepo(repo);
+            owners.values().removeIf(o -> o.repo().equals(repo));
             List<String[]> warnings = new ArrayList<>(); // module, kind, message
             try (var mod = new BatchInserter(conn, "modules", "module", "repo", "group_id", "artifact_id",
                     "version", "packaging", "parent", "path", "has_classes", "is_service");
@@ -174,6 +229,12 @@ public final class Scanner {
                     }
                 }
             }
+            for (PomModel m : models) {
+                String key = keys.get(m);
+                BytecodeScanner bytecode = new BytecodeScanner(conn, options.config(), internalFqns, owners,
+                        msg -> warnings.add(new String[]{key, "duplicate_class", msg}));
+                bytecode.scanModule(repo, key, dir, m.dir());
+            }
             if (git == null) {
                 warnings.add(new String[]{null, "no_git", "not a git repo; it is rescanned every time"});
             }
@@ -196,7 +257,7 @@ public final class Scanner {
             }
             options.log().printf("%-30s scanned: %d modules, %d warnings%n", repo, models.size(), warnings.size());
             return new RepoReport(repo, false, models.size(), warnings.size());
-        } catch (SQLException | RuntimeException e) {
+        } catch (SQLException | IOException | RuntimeException e) {
             conn.rollback();
             throw e;
         } finally {
