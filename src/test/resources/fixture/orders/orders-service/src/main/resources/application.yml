@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: orders
+  kafka:
+    bootstrap-servers: localhost:9092
+server:
+  port: 8080
+shop:
+  topics:
+    orders: shop.orders.v1
+  catalog:
+    base-url: http://localhost:8081
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  kafka:
+    bootstrap-servers: kafka-1:9092,kafka-2:9092
+shop:
+  catalog:
+    base-url: http://catalog:8080

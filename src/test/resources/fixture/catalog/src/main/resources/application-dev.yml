@@ -1,0 +1,6 @@
+shop:
+  topics:
+    orders: dev.shop.orders
+logging:
+  level:
+    com.example.shop: DEBUG

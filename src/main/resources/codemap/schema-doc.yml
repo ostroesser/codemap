@@ -1,0 +1,430 @@
+# Documentation of every table, view and column. Loaded into schema_doc and rendered by `brief`.
+# Keep descriptions terse: they count against the brief's 15k-char budget.
+
+tables:
+  repos:
+    doc: scanned git repositories
+    example: SELECT repo, module_count, class_count, git_commit FROM repos ORDER BY repo;
+    columns:
+      repo: git repo (folder name)
+      app: application name given at scan
+      path: local path
+      git_commit: HEAD commit hash
+      git_dirty: 1 if uncommitted changes at scan time
+      scanned_at: ISO timestamp
+      module_count: number of Maven modules
+      class_count: number of scanned classes
+
+  modules:
+    doc: Maven modules (one per pom.xml)
+    example: SELECT module, repo, packaging, is_service FROM modules ORDER BY repo, module;
+    columns:
+      module: Maven artifactId (unique key)
+      repo: git repo
+      group_id: Maven groupId
+      artifact_id: Maven artifactId
+      version: Maven version
+      packaging: jar|pom|war
+      parent: parent as groupId:artifactId
+      path: module dir relative to repo
+      has_classes: 1 if target/classes was found
+      is_service: 1 if it holds a @SpringBootApplication
+
+  services:
+    doc: deployable Spring Boot apps
+    example: SELECT service, repo, main_class FROM services;
+    columns:
+      service: spring.application.name, else module
+      repo: git repo
+      module: module holding the main class
+      main_class: '@SpringBootApplication class fqn'
+      scan_packages: component-scan base packages, comma-separated
+
+  service_modules:
+    doc: modules on each service's classpath (itself = depth 0)
+    example: SELECT service, module, depth FROM service_modules WHERE depth > 0;
+    columns:
+      service: service
+      module: module packaged into it
+      depth: Maven dependency distance
+
+  scan_warnings:
+    doc: gaps and ambiguities found while scanning
+    example: SELECT kind, COUNT(*) FROM scan_warnings GROUP BY kind;
+    columns:
+      repo: git repo
+      module: module
+      kind: e.g. no_classes, unresolved_placeholder, duplicate_class, profile_dependent
+      message: details
+
+  maven_dependencies:
+    doc: declared Maven dependencies
+    example: SELECT module, group_id, artifact_id, scope FROM maven_dependencies WHERE internal_module IS NULL AND artifact_id LIKE '%kafka%';
+    columns:
+      module: declaring module
+      repo: git repo
+      group_id: dependency groupId
+      artifact_id: dependency artifactId
+      version: resolved version if known
+      scope: compile|runtime|test|provided|import
+      optional: 0/1
+      internal_module: module that produces it, NULL if external
+
+  classes:
+    doc: classes, interfaces, enums, records, annotations
+    example: SELECT role, COUNT(*) FROM classes WHERE is_external = 0 GROUP BY role;
+    columns:
+      fqn: fully qualified name (key)
+      simple_name: name without package
+      package: package
+      repo: git repo (NULL if external)
+      module: module (NULL if external)
+      kind: class|interface|enum|record|annotation
+      visibility: public|protected|package|private
+      is_abstract: 0/1
+      superclass: superclass fqn
+      role: controller|service|repository|component|configuration|entity|client|listener|...
+      role_reason: why the role was assigned
+      source_file: path under src/main/java
+      first_line: first source line
+      last_line: last source line
+      is_external: 1 = referenced only, not scanned
+
+  type_hierarchy:
+    doc: all supertypes of each class, transitive
+    example: SELECT class_fqn FROM type_hierarchy WHERE supertype_fqn = 'com.example.shop.order.OrderService';
+    columns:
+      class_fqn: subtype
+      supertype_fqn: superclass or interface
+      relation: extends|implements
+      depth: 1 = direct
+
+  annotations:
+    doc: annotation usages with attributes
+    example: SELECT target, attributes FROM annotations WHERE annotation = 'Transactional' LIMIT 50;
+    columns:
+      target_kind: class|method|field|parameter
+      target: class fqn, method_id, fqn.field or method_id/paramIndex
+      class_fqn: declaring class
+      annotation_fqn: annotation type fqn
+      annotation: simple name
+      attributes: JSON of explicit attribute values
+
+  annotation_meta:
+    doc: meta-annotations of each annotation type, transitive
+    example: SELECT annotation_fqn FROM annotation_meta WHERE meta_annotation_fqn = 'org.springframework.stereotype.Component';
+    columns:
+      annotation_fqn: annotation type
+      meta_annotation_fqn: annotation present on it, directly or not
+      depth: 1 = direct
+
+  fields:
+    doc: fields
+    example: SELECT name, type FROM fields WHERE class_fqn LIKE '%.OrderService';
+    columns:
+      class_fqn: declaring class
+      name: field name
+      type: readable type incl. generics
+      type_fqn: raw type fqn
+      is_static: 0/1
+      is_final: 0/1
+
+  methods:
+    doc: methods and constructors (<init>)
+    example: SELECT method_id, signature, first_line FROM methods WHERE class_fqn LIKE '%.OrderController';
+    columns:
+      method_id: fqn#name(ParamSimpleTypes) (key)
+      class_fqn: declaring class
+      name: method name
+      signature: readable, e.g. List<Order> findAll(Long customerId)
+      return_type: readable return type
+      visibility: public|protected|package|private
+      is_static: 0/1
+      is_abstract: 0/1
+      first_line: first source line
+      last_line: last source line
+
+  calls:
+    doc: call edges from bytecode (internal targets + integration APIs only)
+    example: SELECT caller_method, line FROM calls WHERE callee_method LIKE '%#place(%';
+    columns:
+      caller_class: calling class
+      caller_method: calling method_id
+      callee_class: static target class
+      callee_method: static target method_id
+      line: source line of the call
+      invoke_kind: virtual|interface|static|special
+
+  class_dependencies:
+    doc: class-to-class usage counts (internal classes only)
+    example: SELECT to_class, weight FROM class_dependencies WHERE from_class LIKE '%.OrderService' ORDER BY weight DESC;
+    columns:
+      from_class: using class
+      to_class: used class
+      weight: number of references
+
+  beans:
+    doc: Spring beans per service
+    example: SELECT role, COUNT(*) FROM beans_effective WHERE service = 'orders' GROUP BY role;
+    columns:
+      service: service
+      bean_name: bean name
+      class_fqn: bean class
+      repo: git repo of the class
+      module: module of the class
+      role: role of the class
+      declared_by: scan|bean_method|auto_config
+      factory_method: method_id of the @Bean method
+      scope: singleton|prototype|request|...
+      is_primary: 0/1
+      conditions: conditions/profiles guarding it
+      source: static|runtime
+
+  injections:
+    doc: dependency injection points and what they resolve to
+    example: SELECT consumer_class, required_type, resolved_class, candidates FROM injections_effective WHERE candidates <> 1;
+    columns:
+      service: service
+      consumer_class: class receiving the dependency
+      point: constructor|field|setter|bean_method_param
+      member: field or parameter name
+      required_type: declared type
+      qualifier: '@Qualifier value'
+      resolved_class: injected class, NULL if unresolved
+      candidates: number of matching beans
+      source: static|runtime
+
+  endpoints:
+    doc: HTTP endpoints
+    example: SELECT service, http_method, path, method_id FROM endpoints_effective WHERE path LIKE '/api/orders%';
+    columns:
+      service: service
+      http_method: GET|POST|... (NULL = any)
+      path: full path, placeholders resolved
+      path_key: path with {vars} as {} for matching
+      class_fqn: controller class
+      method_id: handler method
+      produces: media types
+      consumes: media types
+      path_expr: raw mapping expression
+      source: static|runtime
+
+  listeners:
+    doc: async entry points (messaging, events, schedules)
+    example: SELECT service, kind, destination, method_id FROM listeners_effective ORDER BY kind;
+    columns:
+      service: service
+      kind: kafka|jms|rabbit|event|scheduled
+      destination: topic/queue, placeholders resolved
+      destination_expr: raw expression
+      group_id: consumer group
+      class_fqn: listener class
+      method_id: listener method
+      payload_type: payload or event type
+      schedule: cron/fixedRate/fixedDelay
+      source: static|runtime
+
+  outbound:
+    doc: outgoing calls (HTTP clients, message sends)
+    example: SELECT kind, target, method_id FROM outbound ORDER BY kind, target;
+    columns:
+      repo: git repo
+      module: module
+      kind: http_exchange|feign|rest_client|web_client|rest_template|kafka|jms|rabbit
+      class_fqn: calling class or client interface
+      method_id: calling method or client method
+      line: source line
+      http_method: for HTTP
+      target: path/URL or destination, resolved
+      target_expr: raw expression
+      path_key: path with {vars} as {} for matching
+      client_interface: client interface fqn for declarative clients
+
+  config_properties:
+    doc: flattened application*.yml/properties
+    example: SELECT module, profile, value FROM config_properties WHERE key LIKE '%datasource.url';
+    columns:
+      repo: git repo
+      module: module
+      file: file name
+      profile: profile, '(default)' if none
+      key: flattened key, lists as key[0]
+      value: raw value
+      source: static|runtime
+
+  conditions:
+    doc: auto-configuration outcomes (runtime only)
+    example: SELECT condition_source, message FROM conditions WHERE service = 'orders' AND outcome = 'negative' LIMIT 50;
+    columns:
+      service: service
+      condition_source: auto-configuration class or method
+      outcome: positive|negative
+      message: condition message
+      source: runtime
+
+  entities:
+    doc: JPA entities
+    example: SELECT class_fqn, table_name FROM entities ORDER BY table_name;
+    columns:
+      class_fqn: entity class
+      repo: git repo
+      module: module
+      table_name: table (default derived from class name)
+      schema_name: schema if set
+
+  entity_relations:
+    doc: JPA associations
+    example: SELECT entity_fqn, field, relation, target_entity FROM entity_relations;
+    columns:
+      entity_fqn: owning entity
+      field: field name
+      relation: one_to_one|one_to_many|many_to_one|many_to_many|embedded
+      target_entity: related entity
+      mapped_by: mappedBy if set
+
+  data_repositories:
+    doc: Spring Data repositories
+    example: SELECT class_fqn, entity_fqn, base_interface FROM data_repositories;
+    columns:
+      class_fqn: repository interface
+      repo: git repo
+      module: module
+      entity_fqn: managed entity
+      id_type: id type
+      base_interface: e.g. JpaRepository
+
+  schema_doc:
+    doc: this documentation
+    example: SELECT object, description FROM schema_doc WHERE column = '';
+    columns:
+      object: table or view
+      object_kind: table|view
+      column: column ('' = object itself)
+      description: description
+      example_query: example SQL
+
+views:
+  module_links:
+    doc: Maven dependencies between scanned modules
+    example: SELECT from_repo, from_module, to_repo, to_module FROM module_links WHERE cross_repo = 1;
+    columns:
+      from_repo: depending repo
+      from_module: depending module
+      to_repo: produced-by repo
+      to_module: produced-by module
+      scope: Maven scope
+      cross_repo: 1 if repos differ
+
+  entry_points:
+    doc: endpoints + listeners in one list
+    example: SELECT service, kind, COUNT(*) FROM entry_points GROUP BY service, kind;
+    columns:
+      service: service
+      kind: http|kafka|jms|rabbit|event|scheduled
+      trigger: "'METHOD path', destination, schedule or event type"
+      class_fqn: class
+      method_id: method
+      source: static|runtime
+
+  calls_resolved:
+    doc: calls with interface/abstract targets expanded to implementations
+    example: SELECT DISTINCT target_method FROM calls_resolved WHERE caller_method LIKE '%OrderController#%';
+    columns:
+      caller_class: calling class
+      caller_method: calling method
+      callee_method: static target
+      target_method: concrete implementation
+      via_interface: 1 if expanded
+      line: source line
+
+  message_flows:
+    doc: producer -> destination -> consumer (NULL side = no match found)
+    example: SELECT destination, producer_service, consumer_service FROM message_flows;
+    columns:
+      destination: topic/queue
+      kind: kafka|jms|rabbit
+      producer_method: sending method
+      producer_service: sending service
+      consumer_method: listener method
+      consumer_service: listening service
+
+  http_flows:
+    doc: HTTP client calls matched to endpoints by path
+    example: SELECT client_service, http_method, client_path, server_service, match_quality FROM http_flows;
+    columns:
+      client_module: calling module
+      client_service: calling service
+      client_method: client method
+      http_method: HTTP method
+      client_path: called path
+      server_service: matching service
+      server_method: matching handler
+      server_path: matching endpoint path
+      match_quality: path+method|path|none
+
+  config_effective:
+    doc: config per module and profile, profile value overriding default
+    example: SELECT profile, key, value FROM config_effective WHERE module = 'orders-service' AND key LIKE 'spring.kafka%';
+    columns:
+      repo: git repo
+      module: module
+      profile: profile
+      key: key
+      value: effective value
+      file: file it came from
+      source: static|runtime
+
+  class_summary:
+    doc: one row per scanned class with size and coupling counts
+    example: SELECT fqn, role, calls_in, injected_into FROM class_summary ORDER BY calls_in DESC LIMIT 20;
+    columns:
+      fqn: class
+      simple_name: simple name
+      repo: git repo
+      module: module
+      kind: kind
+      role: role
+      methods: method count
+      calls_in: calls from other classes
+      calls_out: calls to other classes
+      injected_into: number of classes injecting it
+
+  beans_effective:
+    doc: beans, runtime rows when the service has any, else static
+    example: SELECT bean_name, class_fqn FROM beans_effective WHERE service = 'orders' LIMIT 50;
+    columns: {same_as: beans}
+
+  injections_effective:
+    doc: injections, runtime when available
+    example: SELECT consumer_class, resolved_class FROM injections_effective WHERE service = 'orders' LIMIT 50;
+    columns: {same_as: injections}
+
+  endpoints_effective:
+    doc: endpoints, runtime when available
+    example: SELECT http_method, path FROM endpoints_effective WHERE service = 'orders';
+    columns: {same_as: endpoints}
+
+  listeners_effective:
+    doc: listeners, runtime when available
+    example: SELECT kind, destination FROM listeners_effective WHERE service = 'orders';
+    columns: {same_as: listeners}
+
+  beans_compare:
+    doc: bean presence static vs runtime
+    example: SELECT presence, COUNT(*) FROM beans_compare WHERE service = 'orders' GROUP BY presence;
+    columns:
+      service: service
+      bean_name: bean name
+      class_fqn: bean class
+      presence: both|static_only|runtime_only
+
+  endpoints_compare:
+    doc: endpoint presence static vs runtime
+    example: SELECT http_method, path, presence FROM endpoints_compare WHERE presence <> 'both';
+    columns:
+      service: service
+      http_method: HTTP method
+      path_key: normalized path
+      path: path
+      method_id: handler
+      presence: both|static_only|runtime_only

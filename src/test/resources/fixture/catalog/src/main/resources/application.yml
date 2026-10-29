@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: catalog
+  datasource:
+    url: jdbc:h2:mem:catalog
+server:
+  port: 8081
+shop:
+  topics:
+    orders: shop.orders.v1

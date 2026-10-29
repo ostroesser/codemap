@@ -1,0 +1,5 @@
+shop:
+  topics:
+    orders: dev.shop.orders
+  jobs:
+    stale-cron: "0 */5 * * * *"
