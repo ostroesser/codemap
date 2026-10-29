@@ -165,6 +165,35 @@ CREATE TABLE class_dependencies (
 );
 ;;
 -- ── spring ───────────────────────────────────────────────────────
+-- Declarations found in a module's code; beans/injections scope them per service.
+CREATE TABLE bean_definitions (
+  repo           TEXT NOT NULL,
+  module         TEXT NOT NULL,
+  bean_name      TEXT NOT NULL,
+  class_fqn      TEXT,
+  declared_by    TEXT NOT NULL,
+  declaring_class TEXT NOT NULL,
+  factory_method TEXT,
+  scope          TEXT,
+  is_primary     INTEGER,
+  conditions     TEXT
+);
+;;
+CREATE TABLE injection_points (
+  repo           TEXT NOT NULL,
+  module         TEXT NOT NULL,
+  consumer_class TEXT NOT NULL,
+  point          TEXT NOT NULL,
+  member         TEXT,
+  required_type  TEXT,
+  required_fqn   TEXT,
+  is_collection  INTEGER,
+  qualifier      TEXT,
+  value_expr     TEXT
+);
+;;
+CREATE INDEX ix_injection_points_consumer ON injection_points(consumer_class);
+;;
 CREATE TABLE beans (
   service        TEXT NOT NULL,
   bean_name      TEXT NOT NULL,
@@ -378,18 +407,30 @@ LEFT JOIN service_modules sm ON sm.module = o.module
 FULL OUTER JOIN (SELECT * FROM listeners_effective WHERE kind IN ('kafka', 'jms', 'rabbit')) l
   ON l.destination = o.target AND l.kind = o.kind;
 ;;
+-- Declarative clients belong to the services where they are beans; other clients to every
+-- service whose classpath holds the calling module.
 CREATE VIEW http_flows AS
-SELECT o.module AS client_module, sm.service AS client_service,
-       o.method_id AS client_method, o.http_method, o.target AS client_path,
-       e.service AS server_service, e.method_id AS server_method, e.path AS server_path,
+WITH clients AS (
+  SELECT o.module, b.service AS client_service, o.method_id, o.http_method, o.target, o.path_key
+  FROM outbound o JOIN beans_effective b ON b.class_fqn = o.client_interface
+  WHERE o.client_interface IS NOT NULL
+  UNION ALL
+  SELECT o.module, sm.service, o.method_id, o.http_method, o.target, o.path_key
+  FROM outbound o LEFT JOIN service_modules sm ON sm.module = o.module
+  WHERE o.kind IN ('http_exchange', 'feign', 'rest_client', 'web_client', 'rest_template')
+    AND (o.client_interface IS NULL
+         OR NOT EXISTS (SELECT 1 FROM beans_effective b WHERE b.class_fqn = o.client_interface))
+)
+SELECT c.module AS client_module, c.client_service, c.method_id AS client_method, c.http_method,
+       c.target AS client_path, e.service AS server_service, e.method_id AS server_method,
+       e.path AS server_path,
        CASE WHEN e.method_id IS NULL THEN 'none'
-            WHEN o.http_method = e.http_method THEN 'path+method'
+            WHEN c.http_method = e.http_method THEN 'path+method'
             ELSE 'path' END AS match_quality
-FROM outbound o
-LEFT JOIN service_modules sm ON sm.module = o.module
+FROM clients c
 LEFT JOIN endpoints_effective e
-  ON e.path_key = o.path_key AND (o.http_method IS NULL OR e.http_method IS NULL OR e.http_method = o.http_method)
-WHERE o.kind IN ('http_exchange', 'feign', 'rest_client', 'web_client', 'rest_template');
+  ON e.path_key = c.path_key
+ AND (c.http_method IS NULL OR e.http_method IS NULL OR e.http_method = c.http_method);
 ;;
 -- One row per module x profile x key: the profile's value, else the '(default)' value.
 CREATE VIEW config_effective AS

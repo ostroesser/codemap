@@ -14,8 +14,10 @@ public final class ClassFact {
     public boolean isAbstract;
     public String superclass;
     public List<String> interfaces = new ArrayList<>();
-    /** Generic supertypes, readable (e.g. {@code JpaRepository<Product, Long>}), parallel to raw ones. */
+    /** Generic supertypes, readable (e.g. {@code JpaRepository<Product, Long>}). */
     public List<String> genericSupertypes = new ArrayList<>();
+    /** Raw supertype fqn → fqns of its type arguments, e.g. JpaRepository → [Product, Long]. */
+    public Map<String, List<String>> supertypeArguments = new LinkedHashMap<>();
     public String sourceFileName;
     public List<AnnotationFact> annotations = new ArrayList<>();
     public List<FieldFact> fields = new ArrayList<>();
@@ -37,6 +39,8 @@ public final class ClassFact {
         public boolean isStatic;
         public boolean isFinal;
         public Object constantValue;
+        /** Fqns of the type arguments, e.g. List&lt;OrderLine&gt; → [OrderLine fqn]. */
+        public List<String> typeArguments = List.of();
         public List<AnnotationFact> annotations = new ArrayList<>();
     }
 
@@ -57,6 +61,10 @@ public final class ClassFact {
         public List<AnnotationFact> annotations = new ArrayList<>();
         public List<List<AnnotationFact>> parameterAnnotations = new ArrayList<>();
         public List<CallFact> calls = new ArrayList<>();
+        /** Per parameter: fqns of its type arguments. */
+        public List<List<String>> parameterTypeArguments = new ArrayList<>();
+        /** Constructors: field name → index of the parameter stored into it. */
+        public Map<String, Integer> fieldsFromParameters = new LinkedHashMap<>();
 
         /** {@code List<Order> findAll(Long customerId)}. */
         public String readableSignature() {

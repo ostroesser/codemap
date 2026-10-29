@@ -164,6 +164,36 @@ tables:
       to_class: used class
       weight: number of references
 
+  bean_definitions:
+    doc: bean declarations per module (component scan candidates, @Bean methods, Spring Data repositories), before service scoping
+    example: SELECT bean_name, class_fqn, declared_by, conditions FROM bean_definitions WHERE module = 'orders-service';
+    columns:
+      repo: git repo
+      module: declaring module
+      bean_name: bean name
+      class_fqn: 'bean class (for @Bean, the declared return type)'
+      declared_by: scan|bean_method|data_repository|auto_config (listed in AutoConfiguration.imports)
+      declaring_class: class holding the declaration
+      factory_method: method_id of the @Bean method
+      scope: scope if not singleton
+      is_primary: 0/1
+      conditions: '@Profile / @Conditional* guards, e.g. profile=dev'
+
+  injection_points:
+    doc: what each class asks to be injected (@Value points included), before service scoping
+    example: SELECT consumer_class, member, value_expr FROM injection_points WHERE value_expr IS NOT NULL;
+    columns:
+      repo: git repo
+      module: module
+      consumer_class: class receiving the dependency
+      point: constructor|field|setter|bean_method_param
+      member: field or parameter name
+      required_type: declared type, readable
+      required_fqn: bean type looked up (element type for collections)
+      is_collection: 1 for List/Set/Map/Optional/ObjectProvider of beans
+      qualifier: '@Qualifier value'
+      value_expr: '@Value expression, if any'
+
   beans:
     doc: Spring beans per service
     example: SELECT role, COUNT(*) FROM beans_effective WHERE service = 'orders' GROUP BY role;
@@ -174,7 +204,7 @@ tables:
       repo: git repo of the class
       module: module of the class
       role: role of the class
-      declared_by: scan|bean_method|auto_config
+      declared_by: scan|bean_method|data_repository|auto_config
       factory_method: method_id of the @Bean method
       scope: singleton|prototype|request|...
       is_primary: 0/1
@@ -191,8 +221,8 @@ tables:
       member: field or parameter name
       required_type: declared type
       qualifier: '@Qualifier value'
-      resolved_class: injected class, NULL if unresolved
-      candidates: number of matching beans
+      resolved_class: injected bean class, NULL if none or ambiguous
+      candidates: number of matching beans (collections receive all)
       source: static|runtime
 
   endpoints:
@@ -231,7 +261,7 @@ tables:
     columns:
       repo: git repo
       module: module
-      kind: http_exchange|feign|rest_client|web_client|rest_template|kafka|jms|rabbit
+      kind: http_exchange|feign|rest_client|web_client|rest_template|kafka|jms|rabbit|stream|event
       class_fqn: calling class or client interface
       method_id: calling method or client method
       line: source line

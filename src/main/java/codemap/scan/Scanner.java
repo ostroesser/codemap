@@ -30,6 +30,9 @@ import codemap.scan.bytecode.BytecodeScanner;
 import codemap.scan.bytecode.ClasspathIndex;
 import codemap.scan.bytecode.CodeModel;
 import codemap.scan.bytecode.Roles;
+import codemap.scan.spring.Meta;
+import codemap.scan.spring.SpringModel;
+import codemap.scan.spring.SpringScanner;
 import codemap.scan.config.ConfigFiles;
 import codemap.scan.maven.PomModel;
 import codemap.scan.maven.PomReader;
@@ -64,6 +67,8 @@ public final class Scanner {
     private final Options options;
     private Set<String> internalFqns;
     private Map<String, BytecodeScanner.Owner> owners;
+    /** Modules rescanned in this run: {repo, module key, module dir}. */
+    private final List<Object[]> changedModules = new ArrayList<>();
 
     public Scanner(Connection conn, Options options) {
         this.conn = conn;
@@ -121,9 +126,31 @@ public final class Scanner {
             CodeModel.rebuild(conn, classpath);
         }
         Roles.assign(conn, options.config());
+        scanSpring();
+        SpringModel.rebuild(conn);
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("UPDATE repos SET class_count = (SELECT COUNT(*) FROM classes c"
                     + " WHERE c.repo = repos.repo AND c.is_external = 0)");
+        }
+    }
+
+    /** Module-scoped Spring facts for rescanned modules; needs the meta-annotation closure. */
+    private void scanSpring() throws SQLException, IOException {
+        Meta meta = Meta.load(conn);
+        SpringScanner spring = new SpringScanner(conn, meta, options.config());
+        conn.setAutoCommit(false);
+        try {
+            for (Object[] m : changedModules) {
+                String module = (String) m[1];
+                Path dir = (Path) m[2];
+                spring.scanModule((String) m[0], module, dir, BytecodeScanner.readModule(dir, module, owners));
+            }
+            conn.commit();
+        } catch (SQLException | IOException | RuntimeException e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(true);
         }
     }
 
@@ -234,6 +261,7 @@ public final class Scanner {
                 BytecodeScanner bytecode = new BytecodeScanner(conn, options.config(), internalFqns, owners,
                         msg -> warnings.add(new String[]{key, "duplicate_class", msg}));
                 bytecode.scanModule(repo, key, dir, m.dir());
+                changedModules.add(new Object[]{repo, key, m.dir()});
             }
             if (git == null) {
                 warnings.add(new String[]{null, "no_git", "not a git repo; it is rescanned every time"});

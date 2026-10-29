@@ -161,7 +161,7 @@ class ScannerTest {
         Files.move(moved, classes); // "mvn compile" happened, commit unchanged
         assertFalse(report(Scanner.scan(localDb, List.of(ws), options(false)), "catalog").skipped());
         try (Connection c = Database.openReadOnly(localDb)) {
-            assertEquals("0", one(c, "SELECT COUNT(*) FROM scan_warnings WHERE repo = 'catalog'"));
+            assertEquals("0", one(c, "SELECT COUNT(*) FROM scan_warnings WHERE repo = 'catalog' AND kind = 'no_classes'"));
         }
     }
 
@@ -176,7 +176,8 @@ class ScannerTest {
         }
         Scanner.scan(localDb, List.of(ws), options(true));
         try (Connection c = Database.openReadOnly(localDb)) {
-            assertEquals("x|runtime", one(c, "SELECT bean_name, source FROM beans"));
+            assertEquals("x", one(c, "SELECT bean_name FROM beans WHERE source = 'runtime'"));
+            assertEquals("0", one(c, "SELECT COUNT(*) FROM beans WHERE bean_name = 'y'"));
         }
     }
 

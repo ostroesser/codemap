@@ -63,6 +63,30 @@ public final class BytecodeScanner {
         return names;
     }
 
+    /** Re-reads the classes of a module that the database attributes to it. */
+    public static List<ClassFact> readModule(Path moduleDir, String module, Map<String, Owner> owners)
+            throws IOException {
+        Path classesDir = moduleDir.resolve("target/classes");
+        List<ClassFact> facts = new ArrayList<>();
+        if (!Files.isDirectory(classesDir)) {
+            return facts;
+        }
+        try (Stream<Path> s = Files.walk(classesDir)) {
+            for (Path p : (Iterable<Path>) s.filter(f -> f.toString().endsWith(".class")).sorted()::iterator) {
+                String name = p.getFileName().toString();
+                if (name.equals("module-info.class") || name.equals("package-info.class")) {
+                    continue;
+                }
+                ClassFact fact = ClassFactReader.read(Files.readAllBytes(p));
+                Owner owner = owners.get(fact.fqn);
+                if (owner != null && owner.module().equals(module)) {
+                    facts.add(fact);
+                }
+            }
+        }
+        return facts;
+    }
+
     public List<ClassFact> scanModule(String repo, String module, Path repoDir, Path moduleDir)
             throws IOException, SQLException {
         Path classesDir = moduleDir.resolve("target/classes");

@@ -98,6 +98,120 @@ public final class TypeNames {
         return new MethodTypes(simpleOf(Type.getReturnType(descriptor)), params);
     }
 
+    /**
+     * Raw fqns of the first-level type arguments of a field/parameter type signature:
+     * {@code List<Order>} → [Order fqn]; {@code Map<String, List<X>>} → [String, List]. Empty if none.
+     */
+    public static List<String> typeArguments(String typeSignature) {
+        if (typeSignature == null) {
+            return List.of();
+        }
+        try {
+            ArgCollector c = new ArgCollector();
+            new SignatureReader(typeSignature).acceptType(c);
+            return c.args;
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    /** Per method parameter: raw fqns of its first-level type arguments (empty list if none). */
+    public static List<List<String>> parameterTypeArguments(String methodSignature, int parameterCount) {
+        List<List<String>> result = new ArrayList<>();
+        if (methodSignature != null) {
+            try {
+                new SignatureReader(methodSignature).accept(new SignatureVisitor(Opcodes.ASM9) {
+                    @Override
+                    public SignatureVisitor visitParameterType() {
+                        ArgCollector c = new ArgCollector();
+                        result.add(c.args);
+                        return c;
+                    }
+
+                    @Override
+                    public SignatureVisitor visitReturnType() {
+                        return new ArgCollector();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitClassBound() {
+                        return new ArgCollector();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitInterfaceBound() {
+                        return new ArgCollector();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitExceptionType() {
+                        return new ArgCollector();
+                    }
+                });
+            } catch (RuntimeException e) {
+                result.clear();
+            }
+        }
+        if (result.size() != parameterCount) {
+            result.clear();
+            for (int i = 0; i < parameterCount; i++) {
+                result.add(List.of());
+            }
+        }
+        return result;
+    }
+
+    /** Collects raw names of the type arguments of the visited class type. */
+    static class ArgCollector extends SignatureVisitor {
+        final List<String> args = new ArrayList<>();
+
+        ArgCollector() {
+            super(Opcodes.ASM9);
+        }
+
+        @Override
+        public void visitInnerClassType(String name) {
+            args.clear(); // arguments of the outer type do not count
+        }
+
+        @Override
+        public SignatureVisitor visitTypeArgument(char wildcard) {
+            int index = args.size();
+            args.add(null);
+            return new SignatureVisitor(Opcodes.ASM9) {
+                private String raw;
+
+                @Override
+                public void visitClassType(String name) {
+                    raw = name;
+                    args.set(index, fqn(name));
+                }
+
+                @Override
+                public void visitInnerClassType(String name) {
+                    raw = raw + "$" + name;
+                    args.set(index, fqn(raw));
+                }
+
+                @Override
+                public void visitTypeVariable(String name) {
+                    args.set(index, name);
+                }
+
+                @Override
+                public SignatureVisitor visitTypeArgument(char w) {
+                    return new SignatureVisitor(Opcodes.ASM9) {
+                    };
+                }
+            };
+        }
+
+        @Override
+        public void visitTypeArgument() {
+            args.add("?");
+        }
+    }
+
     /** Builds a readable type string from a generic signature, with simple class names. */
     static final class Printer extends SignatureVisitor {
         private final StringBuilder sb = new StringBuilder();

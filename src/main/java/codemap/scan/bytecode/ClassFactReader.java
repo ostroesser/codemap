@@ -166,6 +166,36 @@ public final class ClassFactReader {
                 });
                 printers.forEach(p -> fact.genericSupertypes.add(p.toString()));
                 collectSignatureTypes(signature);
+                new SignatureReader(signature).accept(new SignatureVisitor(Opcodes.ASM9) {
+                    @Override
+                    public SignatureVisitor visitSuperclass() {
+                        return supertype();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitInterface() {
+                        return supertype();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitClassBound() {
+                        return new TypeNames.ArgCollector();
+                    }
+
+                    @Override
+                    public SignatureVisitor visitInterfaceBound() {
+                        return new TypeNames.ArgCollector();
+                    }
+
+                    private SignatureVisitor supertype() {
+                        return new TypeNames.ArgCollector() {
+                            @Override
+                            public void visitClassType(String name) {
+                                fact.supertypeArguments.put(TypeNames.fqn(name), args);
+                            }
+                        };
+                    }
+                });
             } catch (RuntimeException ignored) {
                 // generic info is optional
             }
@@ -202,6 +232,7 @@ public final class ClassFactReader {
             f.isStatic = (access & Opcodes.ACC_STATIC) != 0;
             f.isFinal = (access & Opcodes.ACC_FINAL) != 0;
             f.constantValue = value;
+            f.typeArguments = TypeNames.typeArguments(signature);
             fact.fields.add(f);
             addType(Type.getType(descriptor));
             if (signature != null) {
@@ -234,6 +265,7 @@ public final class ClassFactReader {
             m.returnType = types.returnType();
             m.parameterTypes.addAll(types.parameterTypes());
             Type[] args = Type.getArgumentTypes(descriptor);
+            m.parameterTypeArguments.addAll(TypeNames.parameterTypeArguments(signature, args.length));
             for (Type t : args) {
                 addType(t);
                 m.parameterAnnotations.add(new ArrayList<>());
@@ -263,6 +295,7 @@ public final class ClassFactReader {
             private final Deque<String> hints = new ArrayDeque<>();
             private int mpIndex;
             private int line;
+            private int lastLoadedSlot = -1;
 
             MethodReader(MethodFact m, Type[] args) {
                 super(Opcodes.ASM9);
@@ -307,7 +340,18 @@ public final class ClassFactReader {
             }
 
             @Override
+            public void visitVarInsn(int opcode, int varIndex) {
+                lastLoadedSlot = opcode >= Opcodes.ILOAD && opcode <= Opcodes.ALOAD ? varIndex : -1;
+            }
+
+            @Override
+            public void visitInsn(int opcode) {
+                lastLoadedSlot = -1;
+            }
+
+            @Override
             public void visitLdcInsn(Object value) {
+                lastLoadedSlot = -1;
                 if (value instanceof String s) {
                     hint("str:" + s);
                 } else if (value instanceof Type t && t.getSort() == Type.OBJECT) {
@@ -317,6 +361,17 @@ public final class ClassFactReader {
 
             @Override
             public void visitFieldInsn(int opcode, String fieldOwner, String name, String descriptor) {
+                if (opcode == Opcodes.PUTFIELD && m.name.equals("<init>") && fieldOwner.equals(owner)
+                        && lastLoadedSlot > 0) {
+                    int slot = 1;
+                    for (int i = 0; i < args.length; i++) {
+                        if (slot == lastLoadedSlot) {
+                            m.fieldsFromParameters.putIfAbsent(name, i);
+                        }
+                        slot += args[i].getSize();
+                    }
+                }
+                lastLoadedSlot = -1;
                 if (opcode == Opcodes.GETSTATIC) {
                     hint("static:" + TypeNames.fqn(fieldOwner) + "." + name);
                 } else if (opcode == Opcodes.GETFIELD) {
@@ -329,8 +384,12 @@ public final class ClassFactReader {
 
             @Override
             public void visitTypeInsn(int opcode, String type) {
+                lastLoadedSlot = -1;
                 if (!type.startsWith("[")) {
                     fact.ref(type);
+                    if (opcode == Opcodes.NEW) {
+                        hint("new:" + TypeNames.fqn(type));
+                    }
                 }
             }
 
@@ -361,6 +420,7 @@ public final class ClassFactReader {
             }
 
             private void addCall(String calleeOwner, String name, String descriptor, String kind) {
+                lastLoadedSlot = -1;
                 String ownerFqn = TypeNames.fqn(calleeOwner);
                 m.calls.add(new CallFact(ownerFqn, name, descriptor,
                         TypeNames.methodId(ownerFqn, name, descriptor), line, kind, List.copyOf(hints)));
