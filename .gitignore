@@ -10,6 +10,7 @@ codemap.local.yml
 *.db-journal
 *.db-wal
 *.db-shm
+*.lastrun.json
 out/
 output/
 codemap-out/
