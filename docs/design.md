@@ -5,6 +5,10 @@
 - Beans, injections, endpoints and listeners are scoped per `service` (deployable module);
   `import-actuator` takes `--service`.
 - `calls` stores internal callees plus an allow-list of integration APIs only.
+- Bean and injection facts are first recorded per module (`bean_definitions`,
+  `injection_points`), then scoped per service by a workspace-wide pass after every scan.
+- ClassGraph was dropped: one ASM pass per class, plus lazy loading of dependency-jar headers
+  from `target/codemap.classpath` for meta-annotations and supertypes.
 
 ## 1. Library choices
 

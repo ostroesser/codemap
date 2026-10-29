@@ -67,7 +67,7 @@ class ReportsTest {
     void digestCoversTheApplication() throws Exception {
         String d = new Digest(c).render("shop", Digest.MAX_CHARS);
         for (String expected : new String[]{
-                "3 repos, 5 modules, 2 services, 26 classes, 5 HTTP endpoints, 3 async entry points, 4 entities.",
+                "3 repos, 5 modules, 2 services, 27 classes, 5 HTTP endpoints, 3 async entry points, 4 entities.",
                 "- shop-common [library] 5 classes",
                 "- orders-service -> shop-common (shop-common)",
                 "- GET /products/{id} -> ProductController#get",

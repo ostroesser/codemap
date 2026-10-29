@@ -102,10 +102,22 @@ class SpringFactsTest {
         assertEquals(List.of("shop.orders.audit|orders|null", "shop.orders.v1|orders|catalog"),
                 rows(c, "SELECT destination, producer_service, consumer_service FROM message_flows ORDER BY destination"));
         assertEquals(List.of(
-                        "orders|GET|catalog|" + P + "catalog.web.ProductController#get(long)|path+method",
-                        "orders|POST|catalog|" + P + "catalog.web.ProductController#reserve(long,int)|path+method"),
-                rows(c, "SELECT client_service, http_method, server_service, server_method, match_quality"
-                        + " FROM http_flows ORDER BY http_method"));
+                        P + "common.catalog.CatalogClient#get(long)|GET|" + P + "catalog.web.ProductController#get(long)",
+                        P + "common.catalog.CatalogClient#reserve(long,int)|POST|" + P + "catalog.web.ProductController#reserve(long,int)",
+                        P + "orders.app.StockAuditClient#audit(long,int)|POST|" + P + "catalog.web.ProductController#reserve(long,int)",
+                        P + "orders.app.StockAuditClient#listAll()|GET|" + P + "catalog.web.ProductController#list(String)"),
+                rows(c, "SELECT client_method, http_method, server_method FROM http_flows"
+                        + " WHERE client_service = 'orders' AND server_service = 'catalog' AND match_quality = 'path+method'"
+                        + " ORDER BY client_method"));
+        assertEquals("0", one(c, "SELECT COUNT(*) FROM http_flows WHERE match_quality = 'none'"));
+    }
+
+    @Test
+    void urlsBuiltByConcatenationKeepTheirConstantParts() throws Exception {
+        assertEquals(List.of("rest_client|POST|{?}/products/{?}/reservations?quantity={?}|/products/{}/reservations",
+                        "rest_client|GET|http://catalog:8080/products|/products"),
+                rows(c, "SELECT kind, http_method, target, path_key FROM outbound WHERE class_fqn LIKE '%StockAuditClient'"
+                        + " ORDER BY line"));
     }
 
     @Test

@@ -27,7 +27,7 @@ class BytecodeScanTest {
 
     @Test
     void classesWithKindsAndSourceLocations() throws Exception {
-        assertEquals("26", one(c, "SELECT COUNT(*) FROM classes WHERE is_external = 0"));
+        assertEquals("27", one(c, "SELECT COUNT(*) FROM classes WHERE is_external = 0"));
         assertEquals("interface|0", one(c, "SELECT kind, is_abstract FROM classes WHERE simple_name = 'OrderService'"));
         assertEquals("record", one(c, "SELECT kind FROM classes WHERE simple_name = 'ProductDto'"));
         assertEquals("annotation", one(c, "SELECT kind FROM classes WHERE simple_name = 'UseCase'"));
@@ -37,7 +37,7 @@ class BytecodeScanTest {
                 one(c, "SELECT source_file FROM classes WHERE simple_name = 'ProductService'"));
         assertEquals("1", one(c, "SELECT COUNT(*) FROM classes WHERE is_external = 1"
                 + " AND fqn = 'org.springframework.data.repository.Repository'"));
-        assertEquals(List.of("catalog|10", "orders|11", "shop-common|5"),
+        assertEquals(List.of("catalog|10", "orders|12", "shop-common|5"),
                 rows(c, "SELECT repo, class_count FROM repos ORDER BY repo"));
     }
 
@@ -119,6 +119,7 @@ class BytecodeScanTest {
                         "ProductService|service|@Service via @UseCase",
                         "StaleOrderJob|listener|@Scheduled on a method",
                         "StartupLogger|listener|@EventListener on a method",
+                        "StockAuditClient|component|@Component",
                         "StockReservations|null|null",
                         "Topics|null|null",
                         "UseCase|null|null"),

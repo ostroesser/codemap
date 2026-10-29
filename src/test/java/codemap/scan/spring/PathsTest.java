@@ -21,6 +21,8 @@ class PathsTest {
         assertEquals("/products/{}/reservations", Paths.key("/products/{id}/reservations/"));
         assertEquals("/a", Paths.key("${catalog.url}/a"));
         assertEquals("/", Paths.key(""));
+        assertEquals("/products/{}/reservations", Paths.key("{?}/products/{?}/reservations?quantity={?}"));
+        assertEquals("/owners/{}/pets/{}", Paths.key("/owners/*/pets/{petId}"));
     }
 
     @Test

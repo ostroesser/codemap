@@ -406,16 +406,16 @@ public final class SpringScanner {
             Integer line = call.line() == 0 ? null : call.line();
             if (simpleOwner.startsWith("Kafka") && (name.equals("send") || name.equals("sendDefault"))) {
                 String target = name.equals("sendDefault") ? "${spring.kafka.template.default-topic}"
-                        : stringArgument(c, m, call);
+                        : stringArgument(c, call, true);
                 out.outbound().add(out.repo(), out.module(), "kafka", c.fqn, m.id, line, null, target, null);
             } else if (simpleOwner.startsWith("Jms") && (name.equals("convertAndSend") || name.equals("send")
                     || name.equals("destination"))) {
-                out.outbound().add(out.repo(), out.module(), "jms", c.fqn, m.id, line, null, stringArgument(c, m, call), null);
+                out.outbound().add(out.repo(), out.module(), "jms", c.fqn, m.id, line, null, stringArgument(c, call, true), null);
             } else if ((simpleOwner.equals("RabbitTemplate") || simpleOwner.equals("AmqpTemplate"))
                     && (name.equals("convertAndSend") || name.equals("send"))) {
-                out.outbound().add(out.repo(), out.module(), "rabbit", c.fqn, m.id, line, null, stringArgument(c, m, call), null);
+                out.outbound().add(out.repo(), out.module(), "rabbit", c.fqn, m.id, line, null, stringArgument(c, call, true), null);
             } else if (simpleOwner.equals("StreamBridge") && name.equals("send")) {
-                out.outbound().add(out.repo(), out.module(), "stream", c.fqn, m.id, line, null, stringArgument(c, m, call), null);
+                out.outbound().add(out.repo(), out.module(), "stream", c.fqn, m.id, line, null, stringArgument(c, call, true), null);
             } else if (simpleOwner.equals("ApplicationEventPublisher") && name.equals("publishEvent")) {
                 String type = lastHint(call, "new:");
                 out.outbound().add(out.repo(), out.module(), "event", c.fqn, m.id, line, null,
@@ -424,7 +424,7 @@ public final class SpringScanner {
                 String method = restTemplateVerb(name, call);
                 if (method != null || name.equals("exchange")) {
                     out.outbound().add(out.repo(), out.module(), "rest_template", c.fqn, m.id, line, method,
-                            stringArgument(c, m, call), null);
+                            stringArgument(c, call, true), null);
                 }
             } else if (simpleOwner.equals("RestClient") || simpleOwner.equals("WebClient")) {
                 if (Set.of("get", "post", "put", "delete", "patch", "head", "options").contains(name)) {
@@ -435,7 +435,7 @@ public final class SpringScanner {
                 }
             } else if (simpleOwner.contains("UriSpec") && name.equals("uri") && call.descriptor().startsWith("(Ljava/lang/String;")) {
                 String kind = owner.contains("reactive") ? "web_client" : "rest_client";
-                out.outbound().add(out.repo(), out.module(), kind, c.fqn, m.id, line, verb, stringArgument(c, m, call), null);
+                out.outbound().add(out.repo(), out.module(), kind, c.fqn, m.id, line, verb, stringArgument(c, call, false), null);
                 verb = null;
             }
         }
@@ -474,41 +474,92 @@ public final class SpringScanner {
     }
 
     /**
-     * Best-effort first String argument of an API call, from the operands pushed before it: the
-     * hint right after the receiver (a field of the API type), else the last string-like hint.
+     * Best-effort String argument of an API call, from the operands pushed before it. Messaging
+     * and RestTemplate calls ({@code afterReceiver}): the operand right after the receiver (a
+     * field of the API type). Fluent URI calls: the last value pushed before the call.
      */
-    private String stringArgument(ClassFact c, MethodFact m, CallFact call) {
+    private String stringArgument(ClassFact c, CallFact call, boolean afterReceiver) {
         List<String> hints = call.hints();
-        int receiver = -1;
-        for (int i = 0; i < hints.size(); i++) {
-            String h = hints.get(i);
-            if (h.startsWith("field:" + c.fqn + ".")) {
-                FieldFact f = field(c, h.substring(("field:" + c.fqn + ".").length()));
-                if (f != null && f.typeFqn != null && config.keepsCall(f.typeFqn, f.typeFqn + "#")) {
-                    receiver = i;
-                }
-            }
-        }
-        String candidate = null;
-        if (receiver >= 0 && receiver + 1 < hints.size()) {
-            candidate = hints.get(receiver + 1);
-        } else {
-            for (int i = hints.size() - 1; i >= 0 && candidate == null; i--) {
+        int index = -1;
+        if (afterReceiver) {
+            int receiver = -1;
+            for (int i = 0; i < hints.size(); i++) {
                 String h = hints.get(i);
-                if (h.startsWith("str:") || h.startsWith("static:")) {
-                    candidate = h;
+                if (h.startsWith("field:" + c.fqn + ".")) {
+                    FieldFact f = field(c, h.substring(("field:" + c.fqn + ".").length()));
+                    if (f != null && f.typeFqn != null && config.keepsCall(f.typeFqn, f.typeFqn + "#")) {
+                        receiver = i;
+                    }
+                }
+            }
+            for (int i = receiver + 1; receiver >= 0 && i < hints.size() && index < 0; i++) {
+                if (isValue(hints.get(i))) {
+                    index = i;
                 }
             }
         }
-        return candidate == null ? null : expression(c, m, candidate);
+        if (index < 0 && !afterReceiver) {
+            // uri(template, vars...): the template is the last literal or concatenation, not a var
+            for (int i = hints.size() - 1; i >= 0 && index < 0; i--) {
+                if (hints.get(i).startsWith("str:") || hints.get(i).startsWith("concat:")) {
+                    index = i;
+                }
+            }
+        }
+        if (index < 0) {
+            for (int i = hints.size() - 1; i >= 0 && index < 0; i--) {
+                if (isValue(hints.get(i))) {
+                    index = i;
+                }
+            }
+        }
+        if (index < 0) {
+            return null;
+        }
+        return hints.get(index).startsWith("concat:") ? concat(c, hints, index) : expression(c, hints.get(index));
     }
 
-    private static String expression(ClassFact c, MethodFact m, String hint) {
+    private static boolean isValue(String hint) {
+        return hint.startsWith("str:") || hint.startsWith("static:") || hint.startsWith("field:")
+                || hint.startsWith("concat:") || hint.startsWith("call:");
+    }
+
+    /**
+     * Rebuilds {@code base + "/path/" + id} from a concatenation recipe: constant parts are kept,
+     * a single leading dynamic part is taken from the operand pushed just before, every other
+     * dynamic part becomes {@code {?}} (it matches any path segment).
+     */
+    private static String concat(ClassFact c, List<String> hints, int index) {
+        String recipe = hints.get(index).substring("concat:".length());
+        long dynamic = recipe.chars().filter(ch -> ch == '\u0001').count();
+        String first = "{?}";
+        if (dynamic == 1 && recipe.startsWith("\u0001") && index > 0 && isValue(hints.get(index - 1))) {
+            String e = expression(c, hints.get(index - 1));
+            if (e != null) {
+                first = e;
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < recipe.length(); i++) {
+            char ch = recipe.charAt(i);
+            if (ch == '\u0001') {
+                sb.append(i == 0 ? first : "{?}");
+            } else if (ch != '\u0002') {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String expression(ClassFact c, String hint) {
         if (hint.startsWith("str:")) {
             return hint.substring(4);
         }
         if (hint.startsWith("new:")) {
             return TypeNames.simple(hint.substring(4));
+        }
+        if (hint.startsWith("call:")) {
+            return "{" + hint.substring(5) + "}";
         }
         if (hint.startsWith("static:")) {
             String ref = hint.substring(7);
@@ -537,16 +588,23 @@ public final class SpringScanner {
                     }
                 }
                 for (MethodFact ctor : c.methods) {
-                    Integer index = ctor.name.equals("<init>") ? ctor.fieldsFromParameters.get(name) : null;
+                    if (!ctor.name.equals("<init>")) {
+                        continue;
+                    }
+                    Integer index = ctor.fieldsFromParameters.get(name);
                     if (index != null && index < ctor.parameterAnnotations.size()) {
                         AnnotationFact value = Meta.exact(ctor.parameterAnnotations.get(index), Meta.VALUE);
                         if (value != null) {
                             return Meta.string(value.attributes(), "value");
                         }
                     }
+                    String constant = ctor.fieldConstants.get(name);
+                    if (constant != null) {
+                        return constant;
+                    }
                 }
             }
-            return "this." + name;
+            return "{this." + name + "}";
         }
         return null;
     }

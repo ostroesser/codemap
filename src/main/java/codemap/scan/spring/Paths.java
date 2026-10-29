@@ -42,12 +42,12 @@ public final class Paths {
         }
         String p = path.strip();
         p = p.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://[^/]*", "");
-        p = p.replaceFirst("^\\$\\{[^}]*}", "");
+        p = p.replaceFirst("^\\$?\\{[^}]*}", ""); // base URL from a placeholder or an unknown expression
+        p = p.replaceAll("\\{[^}/]*}", "{}").replaceAll("(?<=/)\\*(?=/|$)", "{}");
         int q = p.indexOf('?');
         if (q >= 0) {
             p = p.substring(0, q);
         }
-        p = p.replaceAll("\\{[^}/]*}", "{}");
         if (!p.startsWith("/")) {
             p = "/" + p;
         }

@@ -65,6 +65,8 @@ public final class ClassFact {
         public List<List<String>> parameterTypeArguments = new ArrayList<>();
         /** Constructors: field name → index of the parameter stored into it. */
         public Map<String, Integer> fieldsFromParameters = new LinkedHashMap<>();
+        /** Constructors: field name → string constant stored into it (field initializers). */
+        public Map<String, String> fieldConstants = new LinkedHashMap<>();
 
         /** {@code List<Order> findAll(Long customerId)}. */
         public String readableSignature() {
@@ -87,8 +89,10 @@ public final class ClassFact {
     }
 
     /**
-     * A call site. {@code hints} are the most recent constant-ish operands pushed before the call
-     * (string literals, static/instance field reads), used later to guess topics and URLs.
+     * A call site. {@code hints} are the most recent operands pushed before the call, used later
+     * to guess topics and URLs: {@code str:} literal, {@code static:}/{@code field:} reads,
+     * {@code new:} instantiation, {@code call:} String-returning call, {@code concat:} a string
+     * concatenation recipe (\u0001 marks each dynamic part).
      */
     public record CallFact(String ownerFqn, String name, String descriptor, String calleeId, int line,
                            String invokeKind, List<String> hints) {

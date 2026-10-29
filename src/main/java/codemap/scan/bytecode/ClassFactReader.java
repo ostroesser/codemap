@@ -32,7 +32,7 @@ import codemap.scan.bytecode.ClassFact.MethodFact;
  */
 public final class ClassFactReader {
 
-    private static final int HINT_WINDOW = 6;
+    private static final int HINT_WINDOW = 10;
 
     private ClassFactReader() {
     }
@@ -296,6 +296,7 @@ public final class ClassFactReader {
             private int mpIndex;
             private int line;
             private int lastLoadedSlot = -1;
+            private String lastString;
 
             MethodReader(MethodFact m, Type[] args) {
                 super(Opcodes.ASM9);
@@ -342,16 +343,19 @@ public final class ClassFactReader {
             @Override
             public void visitVarInsn(int opcode, int varIndex) {
                 lastLoadedSlot = opcode >= Opcodes.ILOAD && opcode <= Opcodes.ALOAD ? varIndex : -1;
+                lastString = null;
             }
 
             @Override
             public void visitInsn(int opcode) {
                 lastLoadedSlot = -1;
+                lastString = null;
             }
 
             @Override
             public void visitLdcInsn(Object value) {
                 lastLoadedSlot = -1;
+                lastString = value instanceof String str ? str : null;
                 if (value instanceof String s) {
                     hint("str:" + s);
                 } else if (value instanceof Type t && t.getSort() == Type.OBJECT) {
@@ -361,6 +365,11 @@ public final class ClassFactReader {
 
             @Override
             public void visitFieldInsn(int opcode, String fieldOwner, String name, String descriptor) {
+                if (opcode == Opcodes.PUTFIELD && m.name.equals("<init>") && fieldOwner.equals(owner)
+                        && lastString != null) {
+                    m.fieldConstants.putIfAbsent(name, lastString);
+                }
+                lastString = null;
                 if (opcode == Opcodes.PUTFIELD && m.name.equals("<init>") && fieldOwner.equals(owner)
                         && lastLoadedSlot > 0) {
                     int slot = 1;
@@ -385,6 +394,7 @@ public final class ClassFactReader {
             @Override
             public void visitTypeInsn(int opcode, String type) {
                 lastLoadedSlot = -1;
+                lastString = null;
                 if (!type.startsWith("[")) {
                     fact.ref(type);
                     if (opcode == Opcodes.NEW) {
@@ -410,6 +420,14 @@ public final class ClassFactReader {
 
             @Override
             public void visitInvokeDynamicInsn(String name, String descriptor, Handle bsm, Object... bsmArgs) {
+                lastLoadedSlot = -1;
+                lastString = null;
+                if (bsm.getOwner().equals("java/lang/invoke/StringConcatFactory")) {
+                    String recipe = bsmArgs.length > 0 && bsmArgs[0] instanceof String r ? r
+                            : "\u0001".repeat(Type.getArgumentTypes(descriptor).length);
+                    hint("concat:" + recipe);
+                    return;
+                }
                 for (Object arg : bsmArgs) {
                     // Method references; skips lambda bodies (folded separately) and field handles.
                     if (arg instanceof Handle h && h.getTag() >= Opcodes.H_INVOKEVIRTUAL
@@ -421,10 +439,14 @@ public final class ClassFactReader {
 
             private void addCall(String calleeOwner, String name, String descriptor, String kind) {
                 lastLoadedSlot = -1;
+                lastString = null;
                 String ownerFqn = TypeNames.fqn(calleeOwner);
                 m.calls.add(new CallFact(ownerFqn, name, descriptor,
                         TypeNames.methodId(ownerFqn, name, descriptor), line, kind, List.copyOf(hints)));
                 fact.ref(calleeOwner);
+                if (descriptor.endsWith(")Ljava/lang/String;") && !kind.equals("dynamic")) {
+                    hint("call:" + name + "()");
+                }
             }
 
             private void hint(String h) {
