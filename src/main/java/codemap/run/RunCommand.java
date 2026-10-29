@@ -40,7 +40,11 @@ public final class RunCommand implements Callable<Integer> {
     Path out;
 
     /** Verbs contributed by other commands (diagram). */
-    static final Map<String, Runner.Verb> VERBS = new LinkedHashMap<>();
+    private static final Map<String, Runner.Verb> VERBS = new LinkedHashMap<>();
+
+    public static void register(String verb, Runner.Verb implementation) {
+        VERBS.put(verb, implementation);
+    }
 
     @Override
     public Integer call() throws Exception {
