@@ -1,0 +1,26 @@
+# Private, never committed
+CLAUDE.local.md
+codemap.local.yml
+*.local.yml
+*.local.yaml
+.claude/settings.local.json
+
+# Databases and generated output
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+out/
+output/
+codemap-out/
+captures/
+
+# Build
+target/
+*.class
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
