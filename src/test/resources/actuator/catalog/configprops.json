@@ -1,0 +1,26 @@
+{
+  "contexts": {
+    "catalog": {
+      "beans": {
+        "server-org.springframework.boot.web.server.autoconfigure.ServerProperties": {
+          "prefix": "server",
+          "properties": {
+            "port": 8081,
+            "servlet": {"applicationDisplayName": "application"}
+          },
+          "inputs": {}
+        },
+        "spring.kafka-org.springframework.boot.kafka.autoconfigure.KafkaProperties": {
+          "prefix": "spring.kafka",
+          "properties": {
+            "bootstrapServers": ["broker-1:9092", "broker-2:9092"],
+            "consumer": {"groupId": "catalog", "autoOffsetReset": "earliest"},
+            "properties": {"sasl.jaas.config": "******"}
+          },
+          "inputs": {}
+        }
+      },
+      "parentId": null
+    }
+  }
+}

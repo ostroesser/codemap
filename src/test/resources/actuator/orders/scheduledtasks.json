@@ -1,0 +1,11 @@
+{
+  "cron": [
+    {
+      "runnable": {"target": "com.example.shop.orders.app.StaleOrderJob.purgeStaleOrders"},
+      "expression": "0 */5 * * * *"
+    }
+  ],
+  "fixedDelay": [],
+  "fixedRate": [],
+  "custom": []
+}

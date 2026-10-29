@@ -7,6 +7,7 @@ import java.util.concurrent.Callable;
 import codemap.db.Database;
 import codemap.report.ReportCommands;
 import codemap.run.RunCommand;
+import codemap.runtime.ImportActuatorCommand;
 import codemap.scan.ScanCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -15,7 +16,8 @@ import picocli.CommandLine.Option;
 @Command(name = "codemap", mixinStandardHelpOptions = true, version = "codemap 0.1.0",
         description = "Architecture fact database for Spring Boot codebases, queried by a chat LLM.",
         subcommands = {ScanCommand.class, ReportCommands.BriefCommand.class, ReportCommands.DigestCommand.class,
-                RunCommand.class, ReportCommands.DiagramCommand.class, Main.InitDb.class})
+                RunCommand.class, ReportCommands.DiagramCommand.class, ImportActuatorCommand.class,
+                Main.InitDb.class})
 public final class Main implements Runnable {
 
     static {

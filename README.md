@@ -56,6 +56,7 @@ Rescans are incremental: a repo is skipped when its git commit and build output 
 | `digest --app NAME [--db F] [--max-chars N] [--copy\|--out F]` | Application map (≤ 80k chars; summarised by package/class when larger). |
 | `run [FILE\|-] [--db F] [--page N] [--max-chars N] [--stdout\|--out F]` | Run the blocks of an LLM answer; output ≤ 80k chars with explicit `TRUNCATED:` lines. |
 | `diagram --repo X [--kind components\|artifacts]` / `diagram --app NAME` | C4-PlantUML diagrams (built-in PlantUML C4 library). |
+| `import-actuator --service S [--db F] DIR` | Load actuator JSON dumps of a running service as runtime facts. |
 
 Inside `run`, ```` ```cmd ```` blocks accept one command per line:
 
@@ -83,8 +84,21 @@ diagram app
 | JPA | entities and tables, relations, repositories → entity. |
 | Config | `application*.yml/properties` flattened per profile; `config_effective` overlays a profile on the defaults. |
 
-Every Spring fact table has a `source` column (`static` | `runtime`) so runtime facts can be
-added next to static ones (see Roadmap).
+Every Spring fact table has a `source` column (`static` | `runtime`): runtime facts imported
+from actuator sit next to the static ones (see below).
+
+## Runtime facts (optional)
+
+When you can run a service locally, capture its actuator `beans`, `mappings`, `conditions`,
+`configprops` and `scheduledtasks` endpoints and import them:
+
+```bash
+codemap import-actuator --service orders --db shop.db captures/orders
+```
+
+The `*_effective` views then prefer the observed wiring, mappings and schedules for that
+service; `beans_compare` and `endpoints_compare` show what static analysis missed. The brief and
+digest mention it. See [`docs/runtime-facts.md`](docs/runtime-facts.md) for a local-only profile.
 
 ## Local settings
 
@@ -135,6 +149,5 @@ holds it in the database. Design notes: [`docs/design.md`](docs/design.md).
 
 ## Roadmap
 
-- **v2: runtime facts.** `codemap import-actuator` will load `/actuator/beans`, `/mappings`,
-  `/conditions`, `/configprops` and `/scheduledtasks` dumps of locally running services into the
-  same tables with `source = 'runtime'`; the `*_effective` views then prefer them.
+- Endpoint and listener annotations from in-house frameworks declared in `codemap.local.yml`.
+- Optional exact source ranges with a Java parser if the bytecode-based heuristic falls short.

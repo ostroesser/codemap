@@ -1,0 +1,22 @@
+{
+  "contexts": {
+    "catalog": {
+      "positiveMatches": {
+        "KafkaAutoConfiguration": [
+          {"condition": "OnClassCondition", "message": "@ConditionalOnClass found required class 'org.springframework.kafka.core.KafkaTemplate'"}
+        ]
+      },
+      "negativeMatches": {
+        "RabbitAutoConfiguration": {
+          "notMatched": [
+            {"condition": "OnClassCondition", "message": "@ConditionalOnClass did not find required class 'com.rabbitmq.client.Channel'"}
+          ],
+          "matched": []
+        }
+      },
+      "exclusions": [],
+      "unconditionalClasses": ["org.springframework.boot.autoconfigure.context.ConfigurationPropertiesAutoConfiguration"],
+      "parentId": null
+    }
+  }
+}

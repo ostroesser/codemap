@@ -204,7 +204,7 @@ tables:
       repo: git repo of the class
       module: module of the class
       role: role of the class
-      declared_by: scan|bean_method|data_repository|auto_config
+      declared_by: scan|bean_method|data_repository|auto_config (runtime - also 'runtime' when unknown)
       factory_method: method_id of the @Bean method
       scope: singleton|prototype|request|...
       is_primary: 0/1
@@ -217,8 +217,8 @@ tables:
     columns:
       service: service
       consumer_class: class receiving the dependency
-      point: constructor|field|setter|bean_method_param
-      member: field or parameter name
+      point: constructor|field|setter|bean_method_param (NULL for runtime rows)
+      member: field or parameter name (runtime rows - the dependency bean name)
       required_type: declared type
       qualifier: '@Qualifier value'
       resolved_class: injected bean class, NULL if none or ambiguous
@@ -289,8 +289,8 @@ tables:
     columns:
       service: service
       condition_source: auto-configuration class or method
-      outcome: positive|negative
-      message: condition message
+      outcome: positive|negative|unconditional
+      message: condition messages
       source: runtime
 
   entities:
@@ -436,7 +436,7 @@ views:
     columns: {same_as: endpoints}
 
   listeners_effective:
-    doc: listeners, runtime when available
+    doc: listeners, runtime rows of the same kind when available, else static
     example: SELECT kind, destination FROM listeners_effective WHERE service = 'orders';
     columns: {same_as: listeners}
 

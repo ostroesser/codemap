@@ -348,10 +348,12 @@ SELECT * FROM endpoints e
 WHERE e.source = 'runtime'
    OR NOT EXISTS (SELECT 1 FROM endpoints r WHERE r.service = e.service AND r.source = 'runtime');
 ;;
+-- Per kind: actuator reports scheduled tasks but no message listeners.
 CREATE VIEW listeners_effective AS
 SELECT * FROM listeners l
 WHERE l.source = 'runtime'
-   OR NOT EXISTS (SELECT 1 FROM listeners r WHERE r.service = l.service AND r.source = 'runtime');
+   OR NOT EXISTS (SELECT 1 FROM listeners r WHERE r.service = l.service AND r.kind = l.kind
+                  AND r.source = 'runtime');
 ;;
 CREATE VIEW beans_compare AS
 SELECT service, bean_name, MAX(class_fqn) AS class_fqn,

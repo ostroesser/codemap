@@ -1,0 +1,57 @@
+{
+  "contexts": {
+    "catalog": {
+      "beans": {
+        "productController": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "com.example.shop.catalog.web.ProductController",
+          "resource": "file [/app/classes/com/example/shop/catalog/web/ProductController.class]",
+          "dependencies": ["productService"]
+        },
+        "productService": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "com.example.shop.catalog.app.ProductService",
+          "resource": "file [/app/classes/com/example/shop/catalog/app/ProductService.class]",
+          "dependencies": ["productRepository", "jpaStockReservations"]
+        },
+        "jpaStockReservations": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "com.example.shop.catalog.app.JpaStockReservations$$SpringCGLIB$$0",
+          "resource": "file [/app/classes/com/example/shop/catalog/app/JpaStockReservations.class]",
+          "dependencies": ["productRepository"]
+        },
+        "productRepository": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "jdk.proxy2.$Proxy142",
+          "resource": "com.example.shop.catalog.domain.ProductRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesAutoConfiguration.EnableJpaRepositoriesConfiguration",
+          "dependencies": ["jpaSharedEM_entityManagerFactory"]
+        },
+        "orderEventsListener": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "com.example.shop.catalog.messaging.OrderEventsListener",
+          "resource": "file [/app/classes/com/example/shop/catalog/messaging/OrderEventsListener.class]",
+          "dependencies": ["productService"]
+        },
+        "catalogApplication": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "com.example.shop.catalog.CatalogApplication$$SpringCGLIB$$0",
+          "dependencies": []
+        },
+        "kafkaTemplate": {
+          "aliases": [],
+          "scope": "singleton",
+          "type": "org.springframework.kafka.core.KafkaTemplate",
+          "resource": "class path resource [org/springframework/boot/kafka/autoconfigure/KafkaAutoConfiguration.class]",
+          "dependencies": ["kafkaProducerFactory"]
+        }
+      },
+      "parentId": null
+    }
+  }
+}

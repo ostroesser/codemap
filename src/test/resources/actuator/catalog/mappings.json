@@ -1,0 +1,64 @@
+{
+  "contexts": {
+    "catalog": {
+      "mappings": {
+        "dispatcherServlets": {
+          "dispatcherServlet": [
+            {
+              "handler": "com.example.shop.catalog.web.ProductController#get(long)",
+              "predicate": "{GET [/products/{id}]}",
+              "details": {
+                "handlerMethod": {
+                  "className": "com.example.shop.catalog.web.ProductController",
+                  "name": "get",
+                  "descriptor": "(J)Lcom/example/shop/common/catalog/ProductDto;"
+                },
+                "requestMappingConditions": {
+                  "consumes": [], "headers": [], "methods": ["GET"], "params": [],
+                  "patterns": ["/products/{id}"], "produces": []
+                }
+              }
+            },
+            {
+              "handler": "com.example.shop.catalog.web.ProductController#list(String)",
+              "predicate": "{GET [/products]}",
+              "details": {
+                "handlerMethod": {
+                  "className": "com.example.shop.catalog.web.ProductController",
+                  "name": "list",
+                  "descriptor": "(Ljava/lang/String;)Ljava/util/List;"
+                },
+                "requestMappingConditions": {
+                  "consumes": [], "headers": [], "methods": ["GET"], "params": [],
+                  "patterns": ["/products"],
+                  "produces": [{"mediaType": "application/json", "negated": false}]
+                }
+              }
+            },
+            {
+              "handler": "org.springframework.boot.webmvc.autoconfigure.error.BasicErrorController#error(HttpServletRequest)",
+              "predicate": "{ [/error]}",
+              "details": {
+                "handlerMethod": {
+                  "className": "org.springframework.boot.webmvc.autoconfigure.error.BasicErrorController",
+                  "name": "error",
+                  "descriptor": "(Ljakarta/servlet/http/HttpServletRequest;)Lorg/springframework/http/ResponseEntity;"
+                },
+                "requestMappingConditions": {
+                  "consumes": [], "headers": [], "methods": [], "params": [],
+                  "patterns": ["/error"], "produces": []
+                }
+              }
+            },
+            {
+              "handler": "ResourceHttpRequestHandler [classpath [META-INF/resources/webjars/]]",
+              "predicate": "/webjars/**"
+            }
+          ]
+        },
+        "servletFilters": [],
+        "servlets": []
+      }
+    }
+  }
+}

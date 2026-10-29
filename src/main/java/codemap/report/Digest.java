@@ -42,6 +42,7 @@ public final class Digest {
                 integration(app),
                 components(app),
                 persistence(app),
+                runtime(app),
                 warnings(app),
                 overview(app));
         int[] level = new int[parts.size()];
@@ -325,6 +326,49 @@ public final class Digest {
                 .map(x -> x.getKey() + " (" + x.getValue() + ")").toList())
                 + "\n(summarised: details via entities and entity_relations)\n";
         return new Part("Persistence (JPA entities [table])", List.of(full.toString(), small), 20);
+    }
+
+    /** Where runtime facts were imported: how they differ from what static analysis found. */
+    private Part runtime(String app) throws SQLException {
+        String services = "(SELECT service FROM services WHERE repo IN (SELECT repo FROM repos WHERE app = ?))";
+        List<String[]> rows = db.rows("SELECT DISTINCT service FROM beans WHERE source = 'runtime' AND service IN "
+                + services + " UNION SELECT DISTINCT service FROM endpoints WHERE source = 'runtime' AND service IN "
+                + services + " ORDER BY 1", app, app);
+        if (rows.isEmpty()) {
+            return new Part("Runtime facts", List.of(""), 80);
+        }
+        StringBuilder full = new StringBuilder("Imported from actuator; the *_effective views prefer these rows.\n");
+        StringBuilder small = new StringBuilder("Imported from actuator for: ");
+        List<String> names = new ArrayList<>();
+        for (String[] r : rows) {
+            String s = r[0];
+            names.add(s);
+            full.append("### ").append(s).append('\n');
+            full.append("- beans: ").append(presence("beans_compare", s)).append('\n');
+            full.append("- endpoints: ").append(presence("endpoints_compare", s)).append('\n');
+            List<String> missing = column(db.rows("SELECT http_method || ' ' || path FROM endpoints_compare"
+                    + " WHERE service = ? AND presence = 'static_only' ORDER BY path LIMIT 10", s));
+            if (!missing.isEmpty()) {
+                full.append("  not served at runtime: ").append(String.join(", ", missing)).append('\n');
+            }
+            int negative = db.count("SELECT COUNT(*) FROM conditions WHERE service = ? AND outcome = 'negative'", s);
+            int positive = db.count("SELECT COUNT(*) FROM conditions WHERE service = ? AND outcome = 'positive'", s);
+            if (negative + positive > 0) {
+                full.append("- auto-configuration: ").append(positive).append(" matched, ").append(negative)
+                        .append(" not matched (query conditions)\n");
+            }
+        }
+        small.append(String.join(", ", names)).append(" (compare via beans_compare, endpoints_compare)\n");
+        return new Part("Runtime facts", List.of(full.toString(), small.toString()), 80);
+    }
+
+    private String presence(String view, String service) throws SQLException {
+        List<String> parts = new ArrayList<>();
+        for (String[] p : db.rows("SELECT presence, COUNT(*) FROM " + view + " WHERE service = ?"
+                + " GROUP BY presence ORDER BY presence", service)) {
+            parts.add(p[1] + " " + p[0]);
+        }
+        return String.join(", ", parts);
     }
 
     private Part warnings(String app) throws SQLException {

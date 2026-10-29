@@ -7,6 +7,9 @@
 - `calls` stores internal callees plus an allow-list of integration APIs only.
 - Bean and injection facts are first recorded per module (`bean_definitions`,
   `injection_points`), then scoped per service by a workspace-wide pass after every scan.
+- Runtime import (v2): each actuator file replaces that service's runtime rows of the same
+  kind; `listeners_effective` prefers runtime rows per (service, kind), since actuator reports
+  scheduled tasks but not message listeners.
 - ClassGraph was dropped: one ASM pass per class, plus lazy loading of dependency-jar headers
   from `target/codemap.classpath` for meta-annotations and supertypes.
 
