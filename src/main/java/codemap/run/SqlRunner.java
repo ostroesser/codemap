@@ -30,9 +30,8 @@ public final class SqlRunner {
 
     public Section run(String label, String sql, long offset) {
         String head = "### " + label;
-        String echo = "`" + oneLine(sql, 160).replace("`", "'") + "`";
-        String first = sql.stripLeading().split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
-        if (!Set.of("select", "with", "values", "explain", "pragma").contains(first)) {
+        String echo = "`" + oneLine(Blocks.stripLeadingComments(sql), 160).replace("`", "'") + "`";
+        if (!Blocks.isQuery(sql)) {
             return error(label, head, echo, "only read queries run here (SELECT / WITH)", sql);
         }
         try (Statement st = conn.createStatement()) {

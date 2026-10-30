@@ -14,7 +14,8 @@ public final class Runner {
 
     public static final int DEFAULT_MAX_CHARS = 80_000;
 
-    public record Result(String text, int queries, int commands, List<Integer> unitsShown) {
+    /** @param ignored text fragments without a query, skipped (unfenced input) */
+    public record Result(String text, int queries, int commands, List<Integer> unitsShown, int ignored) {
     }
 
     /** Extra cmd verbs (e.g. diagram) registered by other packages. */
@@ -38,10 +39,12 @@ public final class Runner {
      * @param firstPageShown rows shown per section on page 1 (null when page = 1)
      */
     public Result run(String input, int page, List<Integer> firstPageShown) throws SQLException {
-        List<Blocks.Request> requests = Blocks.extract(input);
+        Blocks.Extraction extraction = Blocks.extractAll(input);
+        List<Blocks.Request> requests = extraction.requests();
         if (requests.isEmpty()) {
-            String msg = "codemap: no ```sql or ```cmd blocks found in the input.\n";
-            return new Result(msg, 0, 0, List.of());
+            String msg = "codemap: no SQL query or command found in the input"
+                    + " (copy the SQL block, or the whole answer with ```sql / ```cmd blocks).\n";
+            return new Result(msg, 0, 0, List.of(), extraction.ignored());
         }
         List<Section> sections = new ArrayList<>();
         int q = 0;
@@ -66,7 +69,7 @@ public final class Runner {
         String preamble = "## codemap results" + (page > 1 ? " · page " + page : "")
                 + " · " + plural(q, "query", "queries") + (c > 0 ? ", " + plural(c, "command", "commands") : "");
         Budget.Rendered rendered = Budget.render(preamble, sections, maxChars, page);
-        return new Result(rendered.text(), q, c, rendered.unitsShown());
+        return new Result(rendered.text(), q, c, rendered.unitsShown(), extraction.ignored());
     }
 
     private Section command(Connection conn, String label, String line) {

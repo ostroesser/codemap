@@ -100,6 +100,9 @@ public final class RunCommand implements Callable<Integer> {
         System.err.printf("%d %s, %d %s -> %,d chars to %s%n", result.queries(),
                 result.queries() == 1 ? "query" : "queries", result.commands(),
                 result.commands() == 1 ? "command" : "commands", result.text().length(), where);
+        if (result.ignored() > 0) {
+            System.err.printf("note: ignored %d text fragment(s) without a query%n", result.ignored());
+        }
         return result.queries() + result.commands() == 0 ? 1 : 0;
     }
 

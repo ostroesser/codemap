@@ -102,7 +102,33 @@ class RunnerTest {
     void noBlocksIsReported() throws Exception {
         Runner.Result r = run("just prose", 80_000);
         assertEquals(0, r.queries() + r.commands());
-        assertTrue(r.text().contains("no ```sql or ```cmd blocks"));
+        assertTrue(r.text().contains("no SQL query or command found"));
+    }
+
+    @Test
+    void copiedSqlWithCommentsRunsEndToEnd() throws Exception {
+        Runner.Result r = run("""
+                -- which services exist?
+                SELECT service FROM services ORDER BY service;  -- alphabetical
+                /* and the topic consumers */
+                SELECT consumer_service FROM message_flows WHERE destination = 'shop.orders.v1';
+                -- cmd: source OrderEventsListener#onOrderPlaced
+                """, 80_000);
+        String t = r.text();
+        assertEquals(2, r.queries());
+        assertEquals(1, r.commands());
+        assertTrue(t.contains("### Q1 · 2 rows · `SELECT service FROM services ORDER BY service`"), t);
+        assertTrue(t.contains("| catalog |\n| orders |"), t);
+        assertTrue(t.contains("### Q2 · 1 row · `SELECT consumer_service FROM message_flows"), t);
+        assertTrue(t.contains("public void onOrderPlaced(OrderPlacedEvent event) {"), t);
+        assertFalse(t.contains("ERROR"), t);
+    }
+
+    @Test
+    void commentedWriteStatementsAreStillRefused() throws Exception {
+        Runner.Result r = run("-- harmless?\nDELETE FROM classes;\nSELECT COUNT(*) AS n FROM classes;", 80_000);
+        assertTrue(r.text().contains("only read queries run here"), r.text());
+        assertTrue(r.text().contains("| n |"), r.text());
     }
 
     @Test

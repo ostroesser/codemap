@@ -38,8 +38,8 @@ codemap scan ~/src/shop --app shop --db shop.db
 codemap brief  --db shop.db --copy
 codemap digest --db shop.db --app shop --copy
 
-# 3. Ask your question in the chat. The LLM ends its answer with ```sql / ```cmd blocks.
-#    Copy the whole answer, then:
+# 3. Ask your question in the chat. The LLM ends its answer with one SQL block.
+#    Copy that block (the chat's copy button is fine), then:
 codemap run --db shop.db          # reads the clipboard, writes results to the clipboard
 #    Paste the results back into the chat. Repeat.
 ```
@@ -58,15 +58,20 @@ Rescans are incremental: a repo is skipped when its git commit and build output 
 | `diagram --repo X [--kind components\|artifacts]` / `diagram --app NAME` | C4-PlantUML diagrams (built-in PlantUML C4 library). |
 | `import-actuator --service S [--db F] DIR` | Load actuator JSON dumps of a running service as runtime facts. |
 
-Inside `run`, ```` ```cmd ```` blocks accept one command per line:
+`run` accepts what the chat's copy button gives you: plain SQL, comments allowed anywhere
+(`--`, `/* */`), several statements separated by `;`. Commands go on their own line inside the
+SQL as `-- cmd: …` (the brief asks the LLM to do this, so one block carries everything):
 
+```sql
+-- entry points per service
+SELECT service, kind, COUNT(*) FROM entry_points GROUP BY service, kind;
+-- cmd: source com.example.shop.orders.app.DefaultOrderService#place
+-- cmd: diagram orders
 ```
-source com.example.shop.orders.app.DefaultOrderService#place
-source OrderController
-diagram orders
-diagram shop-common artifacts
-diagram app
-```
+
+Commands: `source <Class>`, `source <Class#method>`, `diagram <repo> [artifacts]`,
+`diagram app`. A whole copied answer with ```` ```sql ```` / ```` ```cmd ```` fences works
+too; text that is not SQL is skipped. Only read queries run (the database is opened read-only).
 
 `--page 2` re-runs the previous answer and shows the rows after those shown on page 1.
 

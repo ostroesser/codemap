@@ -46,17 +46,17 @@ public final class Brief {
             1. Answer only from facts pasted in this conversation. If a fact is missing, ask for it with a query. \
             Never invent class, method, table, topic, endpoint or config names.
             2. For list-all, count, "where is", "who calls", "what uses" questions, do not guess: emit SQL.
-            3. Put your requests at the END of your answer: each query in a ```sql block (SQLite, SELECT/WITH only; \
-            several queries per block are fine), commands in a ```cmd block. Batch up to ~8 requests per answer; \
-            I paste back all results at once.
+            3. Put ALL your requests at the END of your answer in ONE ```sql block (I copy that block only): \
+            SQLite SELECT/WITH queries, each ending with ';', comments allowed; commands as lines \
+            `-- cmd: <command>`. Batch up to ~8 requests per answer; I paste back all results at once.
             4. Aggregate first (GROUP BY + COUNT), then drill down. Use LIMIT 50 on raw listings. Results are \
             capped at ~80k chars; "TRUNCATED: N more rows" means refine the query, or ask me for the next page.
             5. Prefer the views (entry_points, message_flows, http_flows, calls_resolved, module_links, \
             config_effective, class_summary, *_effective).
             6. Find names with LIKE on simple_name (classes) or method_id before assuming an fqn.
-            7. Commands: `source <Class>`, `source <Class#method>` print code; `diagram <repo>`, \
-            `diagram <repo> artifacts`, `diagram app` print PlantUML. Ask for source only when structure is not \
-            enough.
+            7. Commands (as `-- cmd:` lines): `source <Class>`, `source <Class#method>` print code; \
+            `diagram <repo>`, `diagram <repo> artifacts`, `diagram app` print PlantUML. Ask for source only when \
+            structure is not enough.
             8. Static analysis can be ambiguous: injections.resolved_class NULL with candidates > 1, unresolved \
             ${...} in a path/topic, or a NULL side in a flow means "not determined". Say so instead of picking.%s
             9. End every answer with "Facts established:" and 3-8 terse bullets of what is now known for certain, \

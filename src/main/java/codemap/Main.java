@@ -13,7 +13,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-@Command(name = "codemap", mixinStandardHelpOptions = true, version = "codemap 0.1.0",
+@Command(name = "codemap", mixinStandardHelpOptions = true, version = "codemap 0.2.0",
         description = "Architecture fact database for Spring Boot codebases, queried by a chat LLM.",
         subcommands = {ScanCommand.class, ReportCommands.BriefCommand.class, ReportCommands.DigestCommand.class,
                 RunCommand.class, ReportCommands.DiagramCommand.class, ImportActuatorCommand.class,
