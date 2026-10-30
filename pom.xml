@@ -6,7 +6,7 @@
 
   <groupId>codemap</groupId>
   <artifactId>codemap</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <name>codemap</name>
   <description>Architecture fact database for Spring Boot codebases, queried by a chat LLM</description>
 
